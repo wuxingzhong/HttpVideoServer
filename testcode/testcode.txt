@@ -1,0 +1,218 @@
+
+
+//废弃代码
+int32_t write_buf_proc( void* param, void* expend )
+{	
+
+	void* fp = osl_file_open( "D:/00file_ts/20151014_155134.ts", OSL_FILE_READ_ONLY );
+	if(fp ==NULL) 
+	{
+		osl_log_error( "%s[%d], osl_file_open failed  !\n", __FILE__, __LINE__ );
+		return -1;
+	}
+	char_t buf[2048];
+	int32_t readsize; 
+	int32_t bufsize = sizeof(buf);
+	while(1)
+	{
+		//写buf
+		readsize = osl_file_read(fp, buf, bufsize);
+		if(readsize == 0)
+		{
+			printf("file read over!! \n");
+			osl_file_seek(fp, 0, 0);
+			continue;
+		}
+		cir_buf.write_buf(buf, readsize);
+		osl_usleep(11000);
+		//printf("write_buf!!\n");
+	}
+
+	//buf test
+	cout<<"press any key to continue!!"<<endl;
+	getchar();
+	return -1;
+
+
+	/* 创建线程 文件读写线程*/
+	//void* pthread1 = osl_thread_create( "test1", THREAD_DEFAULT_PRIORIOTY, THREAD_DEFAULT_STACK_SIZE,
+	//	write_buf_proc, NULL, NULL);
+	//osl_thread_start(pthread1);
+
+}
+
+
+
+
+
+
+int main_server()
+{	
+	CHttpSer http_server;
+	//main_Client();
+	//goto END_EXIT;
+	int32_t ret;
+
+	/* 初始化, 返回0表示成功，-1表示失败 */
+	ret = osl_init( NULL);
+	if( ret == -1 )
+	{
+		/* 输出错误信息 */
+		osl_log_error( "%s[%d], osl_ init failed!\n", __FILE__, __LINE__ );
+		goto ERROR_EXIT;
+	}
+
+	/*服务器启动*/
+	http_server.startup();
+
+	/* 等待远程连接 成功返回远程客户端skt  */
+	cout<<"httpser_accept!!"<<endl;
+
+	int32_t client_skt;
+
+	char_t *head = "HTTP/1.1 200 OK\r\n"
+		"Server: wxz-sever 1.0\r\n"
+		"Accept-Ranges: bytes\r\n"
+		"Last-Modified: Mar 17 2015\r\n"
+		"Content-Type: application/file\r\n"
+		"Content-Length: -1\r\n"
+		"Connection: keep-alive \r\n\r\n";
+
+	char_t buf[1024*2];
+	char_t temp_buf[128];
+	int32_t bufsize = sizeof(buf); 
+	int32_t readsize = 0; 
+	int32_t flag  ;
+	char_t* read_pos =NULL;
+	char_t* temp_pos =NULL;
+	do 
+	{
+		client_skt = http_server.httpser_accept();
+		printf("client_skt = %d \n", client_skt);
+		if(client_skt != -1)
+		{	
+			read_pos =NULL;
+			osl_socket_send(client_skt, head, strlen(head)) ;
+
+			flag = false;
+			do
+			{	
+				if(read_pos !=NULL &&readsize !=0 )
+				{	
+					temp_pos = read_pos - 128;
+					cir_buf.read_buf(temp_buf, 128, &temp_pos);
+					int res =  memcmp(temp_buf, buf + readsize-128, 128);
+
+					if( res !=0 )
+					{
+						printf("res == %d\n", res);
+						read_pos = NULL;  //调整
+					}
+
+				}
+				readsize = cir_buf.read_buf(buf, bufsize, &read_pos);
+				if(readsize == 0)
+				{
+					//printf("123123123 14 file read over!! \n");
+
+					//break;
+					continue;
+				}
+				else if(readsize == -1)
+				{
+					//printf("1 412 41 1 1 file read failed!! \n");
+					//break;
+					continue;
+				}
+				do 
+				{
+					ret = osl_socket_send(client_skt, buf, readsize) ;
+
+					//printf("re  send ret = %d!! \n", ret);
+					if(ret ==-1 )
+					{
+						if(osl_socket_get_state() == -1)
+						{
+							printf("client exit!! \n");
+							flag = true;
+							break;
+						}
+					}
+				} while (ret == -1);
+
+				if(flag)
+				{
+					break;
+				}
+				osl_usleep(5000);
+			}while(1);
+
+		}
+		osl_usleep(500000);
+	}while(1);
+
+	cout<<"press any key to continue!!"<<endl;
+	goto END_EXIT;
+END_EXIT:
+	getchar();
+	/* 关闭模块 */
+	osl_exit();
+	return 0;
+
+ERROR_EXIT:
+	getchar();
+	osl_exit();
+	return -1;
+}
+
+int32_t main_server_proc( void* param, void* expend )
+{
+	main_server();
+	return -1;
+
+}
+
+
+
+
+
+		char_t buf[64];
+		uint32_t utc = osl_get_ltc();
+		osl_str_utcfomat( utc, "%04d%02d%02d_%02d%02d%02d", buf, sizeof(buf) );
+		char_t FilePath[64];
+		sprintf( FilePath, "%s%s%s", "D:/00file_ts/", buf,".ts");
+
+		void* fp = osl_file_open( FilePath, OSL_FILE_WRITE_ONLY );
+		if(fp ==NULL) 
+		{
+			osl_log_error( "%s[%d], osl_file_open failed  !\n", __FILE__, __LINE__ );
+			return ;
+		}
+
+		do
+		{
+			/* 接收数据 */
+			ret = url_recv(recv_str, strlen);
+			if( 0 < ret ) 
+			{
+				/* 写文件 */
+				osl_file_write( fp, recv_str, ret);
+			}
+			else if( 0 == ret)
+			{
+				osl_log_error( "%s[%d], osl_socket_recv server exit ! \n", __FILE__, __LINE__ );
+				return ;
+			}
+			else if( ret == -5 )
+			{
+				osl_log_error( "%s[%d], osl_socket_recv failed ! \n", __FILE__, __LINE__ );
+				return ;
+			}
+		}while(1);
+
+		/* 关闭文件 */
+		osl_file_close( fp );
+		
+		
+		
+		
